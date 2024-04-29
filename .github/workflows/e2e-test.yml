@@ -1,0 +1,42 @@
+name: E2E-Test
+#on:
+#  workflow_call:
+#    inputs:
+#      runtime_tag:
+#        description: "Tag for the runner image"
+#        type: "string"
+#        required: true
+on: [workflow_dispatch, push, pull_request]
+
+# Declare default permissions as read only.
+permissions: read-all
+
+env:
+  GO_VERSION: "~1.21"
+  IMG: localhost:5000/keyfactor/ejbca-cert-manager-issuer:latest
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  run-e2e-test:
+    name: Run E2E Tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+
+      # Build docker image
+      - name: Build docker image
+        run: make docker-build
+
+      - name: Setup cluster
+        uses: ./.github/actions/deploy-on-cluster
+        with:
+          runtime_tag: ${{ inputs.runtime_tag }}
+
+      - name: Push image to cluster
+        run: kubectl get nodes && kind load docker-image "${IMG}"
+
+      - name: Run E2E Tests
+        run: make e2e-test
