@@ -22,6 +22,8 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+E2E_KIND_CUSTER_NAME ?= ejbca-cert-mgr-e2e
+
 .PHONY: all
 all: build
 
@@ -169,3 +171,41 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+############
+# CHAINSAW #
+############
+
+# This prepares a kind cluster for running the e2e tests.
+# It will create the configuration in ~/.kube/config or in the
+# file which $KUBECONFIG points at.
+.PHONY: e2e-kind
+e2e-kind:
+	kind delete cluster --name $(E2E_KIND_CUSTER_NAME)
+	kind create cluster --name $(E2E_KIND_CUSTER_NAME) --wait 120s
+	helm repo add jetstack https://charts.jetstack.io --force-update
+	helm install \
+	  cert-manager jetstack/cert-manager \
+	  --namespace cert-manager \
+	  --create-namespace \
+	  --version v1.13.3 \
+	  --set installCRDs=true
+	kubectl -n cert-manager wait deployment \
+	  cert-manager cert-manager-cainjector cert-manager-webhook \
+	  --for condition=Available=True \
+	  --timeout=180s
+	kind load docker-image $(IMG) --name $(E2E_KIND_CUSTER_NAME)
+
+# these tests should run on a real cluster!
+# To prepare the cluster before, run ./test/chainsaw/scripts/ejbca/start-and-prepare.sh
+.PHONY: e2e-test
+e2e-test:
+	kubectl apply -f ./config/crd/bases
+	IMG=$(IMG) chainsaw test --test-dir ./test/chainsaw/e2e/
+
+# these tests should run on a real cluster!
+# To prepare the cluster before, run ./test/chainsaw/scripts/ejbca/start-and-prepare.sh
+.PHONY: e2e-test-local
+e2e-test-local:
+	kubectl apply -f ./config/crd/bases
+	chainsaw test --test-dir ./test/chainsaw/e2e/ --config ./.chainsaw-local.yaml

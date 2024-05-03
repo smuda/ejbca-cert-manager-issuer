@@ -1,0 +1,49 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: issue-cert
+spec:
+  template: true
+  steps:
+    - name: step-01
+      try:
+        - script:
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+            content: |
+              kubectl -n $NAMESPACE create secret tls ejbca-secret --cert=../../scripts/ejbca/admin-cert/admin.pem --key=../../scripts/ejbca/admin-cert/admin.key
+        - script:
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+            content: |
+              kubectl -n $NAMESPACE create secret generic ejbca-ca-secret --from-file=ca.crt=../../scripts/ejbca/admin-cert/ManagementCA.pem
+
+    - name: step-10
+      try:
+        - script:
+            env:
+              - name: NAMESPACE
+                value: ($namespace)
+            content: |
+              # If the clusterrole and clusterrolebinding already exist from other test, delete them
+              kubectl delete clusterrole ejbca-cert-manager-issuer-manager-role || echo ""
+              kubectl delete clusterrolebinding ejbca-cert-manager-issuer-manager-rolebinding || echo ""
+              # Install using helm
+              helm -n $NAMESPACE install \
+                ejbca-cert-manager ../../../../deploy/charts/ejbca-cert-manager-issuer \
+                --set image.tag=latest \
+                --set crd.create=false
+        # Wait for the pod to start
+        - assert:
+            file: 10-verify.yaml
+
+    # Configure the issuer
+    - name: step-11
+      try:
+        - apply:
+            file: 11-configure-issuer.yaml
+        - assert:
+            timeout: 60s
+            file: 11-verify-issuer.yaml

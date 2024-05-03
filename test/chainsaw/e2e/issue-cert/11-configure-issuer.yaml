@@ -1,0 +1,12 @@
+---
+apiVersion: ejbca-issuer.keyfactor.com/v1alpha1
+kind: Issuer
+metadata:
+  name: tls-server
+spec:
+  hostname: ejbca.ejbca.svc
+  ejbcaSecretName: ejbca-secret
+  certificateAuthorityName: E2ECA
+  certificateProfileName: "TLS Server Profile"
+  endEntityProfileName: "TLS Server Profile"
+  caBundleSecretName: ejbca-ca-secret

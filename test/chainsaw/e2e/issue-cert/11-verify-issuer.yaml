@@ -1,0 +1,8 @@
+apiVersion: ejbca-issuer.keyfactor.com/v1alpha1
+kind: Issuer
+metadata:
+  name: tls-server
+status:
+  conditions:
+  - status: "True"
+    type: Ready
